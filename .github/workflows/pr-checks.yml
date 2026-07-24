@@ -45,14 +45,14 @@ jobs:
           sudo apt-get install -y xvfb libgtk-3-0 libxtst6 libxrender1 libxi6 libxrandr2
       - name: Run Linux checks
         if: matrix.os == 'linux'
-        run: xvfb-run -a ./gradlew desktopTest --tests '!com.joetr.lexikon.LexikonDesktopScreenshotTest' :web-launcher:test assemble
+        run: xvfb-run -a ./gradlew :web-launcher:test assemble
       - name: Run macOS checks
         if: matrix.os == 'macos'
         run: ./gradlew desktopTest verifyRoborazziDesktop :web-launcher:test assemble
       - name: Run Windows checks
         if: matrix.os == 'windows'
         shell: pwsh
-        run: ./gradlew.bat desktopTest --tests '!com.joetr.lexikon.LexikonDesktopScreenshotTest' :web-launcher:test assemble
+        run: ./gradlew.bat :web-launcher:test assemble
 
   wasm-unit:
     name: Wasm unit tests
