@@ -30,21 +30,30 @@ class LexikonDesktopScreenshotTest {
     @OptIn(ExperimentalTestApi::class, ExperimentalComposeUiApi::class)
     @Test
     fun desktopSurfaces() {
-        runDesktopComposeUiTest(width = 420, height = 800) {
-            data class Scenario(val name: String, val colorblind: Boolean = false, val showHelp: Boolean = false)
+        data class Scenario(
+            val name: String,
+            val colorblind: Boolean = false,
+            val showHelp: Boolean = false,
+            val wordLength: Int = 5,
+            val width: Int = 420,
+            val height: Int = 800,
+        )
 
-            listOf(
-                Scenario("empty-daily-5"),
-                Scenario("colorblind", colorblind = true),
-                Scenario("help-dialog", showHelp = true),
-            ).forEach { scenario ->
+        listOf(
+            Scenario("empty-daily-5"),
+            Scenario("compact-ten-letters", wordLength = 10),
+            Scenario("compact-viewport", wordLength = 10, width = 360, height = 640),
+            Scenario("colorblind", colorblind = true),
+            Scenario("help-dialog", showHelp = true),
+        ).forEach { scenario ->
+            runDesktopComposeUiTest(width = scenario.width, height = scenario.height) {
                 setContent {
-                    val controller = remember(scenario) { screenshotController(scenario.colorblind) }
+                    val controller = remember(scenario) { screenshotController(scenario.colorblind, scenario.wordLength) }
                     if (scenario.showHelp) {
                         LaunchedEffect(Unit) { controller.openHelp() }
                     }
                     LexikonTheme(colorblind = controller.settings.colorblind) {
-                        Box(Modifier.size(420.dp, 800.dp)) {
+                        Box(Modifier.size(scenario.width.dp, scenario.height.dp)) {
                             LexikonShell(controller, disableAnimations = true)
                         }
                     }
@@ -58,15 +67,25 @@ class LexikonDesktopScreenshotTest {
         }
     }
 
-    private fun screenshotController(colorblind: Boolean = false): GameController {
+    private fun screenshotController(colorblind: Boolean = false, wordLength: Int = 5): GameController {
         val services = fakeScreenshotServices()
+        val sampleWord = when (wordLength) {
+            10 -> "background"
+            else -> "crane"
+        }
         val dictionary = DictionaryRepository.fromWordLists(
-            mapOf(5 to listOf("crane", "slate", "trace")),
-            mapOf(5 to listOf("crane", "slate", "trace", "apple")),
+            mapOf(wordLength to listOf(sampleWord)),
+            mapOf(wordLength to listOf(sampleWord, "slate")),
         )
         val persistence = PersistenceRepository(services.storage)
         val settings = PlayerSettings(colorblind = colorblind, hasSeenHelp = true)
-        return GameController(services, dictionary, persistence, settings, WebRouteParser.Route(GameMode.Daily, 5))
+        return GameController(
+            services,
+            dictionary,
+            persistence,
+            settings,
+            WebRouteParser.Route(GameMode.Daily, wordLength),
+        )
     }
 
     private fun baselinePlatform(): String = when {

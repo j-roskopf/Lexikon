@@ -77,6 +77,12 @@ jobs:
       - name: Build Linux package
         if: matrix.artifact == 'deb'
         run: ./gradlew ${{ matrix.task }}
+      - name: Install WiX Toolset
+        if: matrix.artifact == 'msi'
+        shell: pwsh
+        run: |
+          choco install wixtoolset --version 3.14.0 -y
+          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files (x86)\WiX Toolset v3.14\bin"
       - name: Build Windows package
         if: matrix.artifact == 'msi'
         shell: pwsh
