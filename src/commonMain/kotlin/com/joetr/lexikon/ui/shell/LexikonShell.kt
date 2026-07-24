@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -28,7 +29,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -55,28 +55,26 @@ import com.joetr.lexikon.ui.dialogs.SettingsDialog
 import com.joetr.lexikon.ui.dialogs.StatsDialog
 import com.joetr.lexikon.ui.game.GameBoard
 import com.joetr.lexikon.ui.game.OnscreenKeyboard
+import com.joetr.lexikon.ui.game.computeGameLayoutSpec
 import com.joetr.lexikon.ui.theme.lexikonColors
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 @Composable
 fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
     val colors = lexikonColors()
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val shake = remember { Animatable(0f) }
 
     LaunchedEffect(controller.message) {
         when (val msg = controller.message) {
             is GameMessage.InvalidWord -> {
-                snackbar.showSnackbar("Not in word list")
-                if (!disableAnimations) {
-                    shake.snapTo(0f)
-                    repeat(3) {
-                        shake.animateTo(8f, tween(50))
-                        shake.animateTo(-8f, tween(50))
-                    }
-                    shake.animateTo(0f, tween(50))
-                }
+                showInputErrorFeedback(
+                    snackbar = snackbar,
+                    shake = shake,
+                    text = "Not in word list",
+                    disableAnimations = disableAnimations,
+                )
                 controller.clearMessage()
             }
             is GameMessage.HardModeViolation -> {
@@ -84,7 +82,12 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                 controller.clearMessage()
             }
             is GameMessage.NotEnoughLetters -> {
-                snackbar.showSnackbar("Not enough letters")
+                showInputErrorFeedback(
+                    snackbar = snackbar,
+                    shake = shake,
+                    text = "Not enough letters",
+                    disableAnimations = disableAnimations,
+                )
                 controller.clearMessage()
             }
             is GameMessage.Copied -> {
@@ -118,43 +121,93 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                 }
                 .testTag("lexikon-shell"),
         ) {
-            Column(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxSize()
                     .widthIn(max = 560.dp)
                     .align(Alignment.TopCenter)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .graphicsLayer { translationX = shake.value },
-                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Header(
-                    mode = controller.snapshot.mode,
-                    length = controller.snapshot.wordLength,
-                    onModeChange = controller::requestModeChange,
-                    onLengthChange = controller::requestLengthChange,
-                    onHelp = controller::openHelp,
-                    onStats = controller::openStats,
-                    onSettings = controller::openSettings,
+                val snapshot = controller.snapshot
+                val layout = computeGameLayoutSpec(
+                    maxWidth = maxWidth,
+                    maxHeight = maxHeight,
+                    wordLength = snapshot.wordLength,
+                    rowCount = snapshot.rows.size,
+                    status = snapshot.status,
                 )
-                Spacer(Modifier.weight(0.5f))
-                GameBoard(controller.snapshot, disableAnimations)
-                Spacer(Modifier.height(12.dp))
-                PostGameBanner(
-                    status = controller.snapshot.status,
-                    answer = controller.snapshot.answer,
-                    mode = controller.snapshot.mode,
-                    onCopy = controller::copyResult,
-                    onNext = controller::startNextFreeGame,
-                )
-                Spacer(Modifier.weight(1f))
-                OnscreenKeyboard(
-                    keyboardMarks = controller.keyboardMarks,
-                    onLetter = controller::type,
-                    onBackspace = controller::backspace,
-                    onSubmit = controller::submit,
-                    enabled = controller.snapshot.status == GameStatus.Playing,
-                )
-                Spacer(Modifier.height(12.dp))
+                val scrollState = rememberScrollState()
+
+                Column(Modifier.fillMaxSize()) {
+                    val contentModifier = if (layout.scrollContent) {
+                        Modifier
+                            .weight(1f)
+                            .verticalScroll(scrollState)
+                    } else {
+                        Modifier.weight(1f)
+                    }
+                    Column(
+                        modifier = contentModifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Header(
+                            mode = snapshot.mode,
+                            length = snapshot.wordLength,
+                            compact = layout.compactHeader,
+                            onModeChange = controller::requestModeChange,
+                            onLengthChange = controller::requestLengthChange,
+                            onHelp = controller::openHelp,
+                            onStats = controller::openStats,
+                            onSettings = controller::openSettings,
+                        )
+                        if (layout.scrollContent) {
+                            Spacer(Modifier.height(8.dp))
+                            GameBoard(
+                                snapshot = snapshot,
+                                disableAnimations = disableAnimations,
+                                tileSize = layout.tileSize,
+                                tileGap = layout.tileGap,
+                            )
+                            PostGameBanner(
+                                status = snapshot.status,
+                                answer = snapshot.answer,
+                                mode = snapshot.mode,
+                                onCopy = controller::copyResult,
+                                onNext = controller::startNextFreeGame,
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxWidth(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                GameBoard(
+                                    snapshot = snapshot,
+                                    disableAnimations = disableAnimations,
+                                    tileSize = layout.tileSize,
+                                    tileGap = layout.tileGap,
+                                )
+                            }
+                            PostGameBanner(
+                                status = snapshot.status,
+                                answer = snapshot.answer,
+                                mode = snapshot.mode,
+                                onCopy = controller::copyResult,
+                                onNext = controller::startNextFreeGame,
+                            )
+                        }
+                    }
+                    OnscreenKeyboard(
+                        keyboardMarks = controller.keyboardMarks,
+                        onLetter = controller::type,
+                        onBackspace = controller::backspace,
+                        onSubmit = controller::submit,
+                        enabled = snapshot.status == GameStatus.Playing,
+                        keyHeight = layout.keyHeight,
+                    )
+                }
             }
         }
     }
@@ -192,6 +245,7 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
 private fun Header(
     mode: GameMode,
     length: Int,
+    compact: Boolean,
     onModeChange: (GameMode) -> Unit,
     onLengthChange: (Int) -> Unit,
     onHelp: () -> Unit,
@@ -202,11 +256,11 @@ private fun Header(
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             "Lexikon",
-            style = MaterialTheme.typography.displayLarge,
+            style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayLarge,
             color = colors.ink,
             modifier = Modifier.testTag("brand-title"),
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -248,8 +302,13 @@ private fun Header(
                 }
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.testTag("length-selector")) {
+        Spacer(Modifier.height(if (compact) 6.dp else 8.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("length-selector"),
+        ) {
             for (len in 5..10) {
                 FilterChip(
                     selected = length == len,
@@ -266,5 +325,26 @@ private fun Header(
 private fun TextButtonIcon(label: String, onClick: () -> Unit, tag: String) {
     IconButton(onClick = onClick, modifier = Modifier.testTag(tag)) {
         Text(label, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+private suspend fun showInputErrorFeedback(
+    snackbar: SnackbarHostState,
+    shake: Animatable<Float, *>,
+    text: String,
+    disableAnimations: Boolean,
+) {
+    coroutineScope {
+        launch {
+            if (!disableAnimations) {
+                shake.snapTo(0f)
+                repeat(3) {
+                    shake.animateTo(8f, tween(50))
+                    shake.animateTo(-8f, tween(50))
+                }
+                shake.animateTo(0f, tween(50))
+            }
+        }
+        snackbar.showSnackbar(text)
     }
 }

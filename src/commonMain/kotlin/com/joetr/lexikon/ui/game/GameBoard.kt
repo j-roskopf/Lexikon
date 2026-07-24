@@ -4,17 +4,14 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,21 +42,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 fun GameBoard(
     snapshot: GameSnapshot,
     disableAnimations: Boolean,
+    tileSize: Dp,
+    tileGap: Dp = 6.dp,
     modifier: Modifier = Modifier,
 ) {
-    val colors = lexikonColors()
-    val tileSize = when {
-        snapshot.wordLength <= 5 -> 58.dp
-        snapshot.wordLength <= 7 -> 52.dp
-        else -> 46.dp
-    }
     Column(
         modifier = modifier
-            .widthIn(max = (tileSize * snapshot.wordLength + 6.dp * (snapshot.wordLength - 1)) + 32.dp)
+            .widthIn(max = tileSize * snapshot.wordLength + tileGap * (snapshot.wordLength - 1))
             .fillMaxWidth()
             .testTag("game-board"),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(tileGap),
     ) {
         snapshot.rows.forEachIndexed { rowIndex, row ->
             val isCurrentRow = rowIndex == snapshot.rows.indexOfFirst { row ->
@@ -70,6 +63,7 @@ fun GameBoard(
                 currentInput = if (isCurrentRow) snapshot.currentInput else "",
                 wordLength = snapshot.wordLength,
                 tileSize = tileSize,
+                tileGap = tileGap,
                 rowIndex = rowIndex,
                 disableAnimations = disableAnimations,
             )
@@ -83,10 +77,11 @@ private fun GameRow(
     currentInput: String,
     wordLength: Int,
     tileSize: Dp,
+    tileGap: Dp,
     rowIndex: Int,
     disableAnimations: Boolean,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(tileGap)) {
         for (i in 0 until wordLength) {
             val tile = row.tiles.getOrNull(i) ?: Tile(null, LetterMark.Empty)
             val displayChar = when {
