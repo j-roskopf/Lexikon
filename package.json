@@ -1,0 +1,12 @@
+{
+  "name": "lexikon-web-tests",
+  "private": true,
+  "scripts": {
+    "web:screenshots": "playwright test",
+    "web:screenshots:update": "playwright test --update-snapshots",
+    "web:e2e": "playwright test --grep @e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0"
+  }
+}

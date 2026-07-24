@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Lexikon: Run Desktop",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./gradlew :run",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Lexikon: Run Web",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./gradlew :wasmJsBrowserDevelopmentRun",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Lexikon: Record Screenshots",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "./gradlew recordRoborazziDesktop && npm run web:screenshots:update",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

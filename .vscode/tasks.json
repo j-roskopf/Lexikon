@@ -1,0 +1,44 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Lexikon: Run Desktop",
+      "type": "shell",
+      "command": "./gradlew",
+      "args": [
+        "run"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Lexikon: Run Web",
+      "type": "shell",
+      "command": "./gradlew",
+      "args": [
+        "wasmJsBrowserDevelopmentRun"
+      ],
+      "group": "build",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Lexikon: Record Screenshots",
+      "type": "shell",
+      "command": "./gradlew recordRoborazziDesktop && npm run web:screenshots:update",
+      "group": "test",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    }
+  ]
+}
