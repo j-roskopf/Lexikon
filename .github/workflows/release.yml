@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+env:
+  JAVA_VERSION: 21
+  JAVA_DISTRIBUTION: temurin
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(grep '^lexikon.versionName=' gradle.properties | cut -d= -f2)"
+          code="$(grep '^lexikon.versionCode=' gradle.properties | cut -d= -f2)"
+          new_code=$((code + 1))
+          new_version=$(date -u +"%Y.%m%d.%H%M")
+          perl -pi -e "s/^lexikon.versionCode=.*/lexikon.versionCode=${new_code}/" gradle.properties
+          perl -pi -e "s/^lexikon.versionName=.*/lexikon.versionName=${new_version}/" gradle.properties
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          git commit -m "Bump version to ${new_version} [skip ci]" || true
+          git push origin HEAD:main || true
+          tag="release/${new_version}"
+          git tag "${tag}" || true
+          git push origin "${tag}" || true
+          echo "version=${new_version}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${tag}" >> "$GITHUB_OUTPUT"
+
+  packages:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            task: packageReleaseDeb
+            artifact: deb
+          - os: windows-latest
+            task: packageReleaseMsi
+            artifact: msi
+          - os: macos-latest
+            task: packageReleaseDmg
+            artifact: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag_name }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Linux package
+        if: matrix.artifact == 'deb'
+        run: ./gradlew ${{ matrix.task }}
+      - name: Build Windows package
+        if: matrix.artifact == 'msi'
+        shell: pwsh
+        run: ./gradlew.bat ${{ matrix.task }}
+      - name: Build macOS package
+        if: matrix.artifact == 'dmg'
+        run: ./gradlew ${{ matrix.task }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lexikon-${{ matrix.artifact }}
+          if-no-files-found: error
+          path: build/compose/binaries/**
+
+  github-release:
+    name: Create GitHub release
+    needs:
+      - version
+      - packages
+    if: always() && needs.version.result == 'success' && needs.packages.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag_name }}
+          name: Lexikon ${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            release-artifacts/**/*.deb
+            release-artifacts/**/*.msi
+            release-artifacts/**/*.dmg
+
+  wasm-pages:
+    needs: version
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: https://lexikon.joetr.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.tag_name }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache Kotlin Wasm Binaryen
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/binaryen
+          key: ${{ runner.os }}-kotlin-wasm-binaryen-${{ hashFiles('build.gradle.kts') }}
+          restore-keys: ${{ runner.os }}-kotlin-wasm-binaryen-
+      - run: ./gradlew wasmJsBrowserDistribution
+      - name: Prepare GitHub Pages artifact
+        run: |
+          touch build/dist/wasmJs/productionExecutable/.nojekyll
+          cp build/dist/wasmJs/productionExecutable/index.html \
+            build/dist/wasmJs/productionExecutable/404.html
+          printf 'lexikon.joetr.com\n' > build/dist/wasmJs/productionExecutable/CNAME
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/dist/wasmJs/productionExecutable
+          include-hidden-files: true
+      - uses: actions/deploy-pages@v4

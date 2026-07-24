@@ -1,0 +1,98 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_VERSION: 21
+  JAVA_DISTRIBUTION: temurin
+
+jobs:
+  desktop:
+    name: Desktop checks (${{ matrix.os }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-latest
+          - os: macos
+            runner: macos-latest
+          - os: windows
+            runner: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install Linux desktop dependencies
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgtk-3-0 libxtst6 libxrender1 libxi6 libxrandr2
+      - name: Run Linux checks
+        if: matrix.os == 'linux'
+        run: xvfb-run -a ./gradlew :web-launcher:test assemble
+      - name: Run macOS checks
+        if: matrix.os == 'macos'
+        run: ./gradlew desktopTest verifyRoborazziDesktop :web-launcher:test assemble
+      - name: Run Windows checks
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: ./gradlew.bat :web-launcher:test assemble
+
+  wasm-unit:
+    name: Wasm unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Cache Kotlin Wasm Binaryen
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/binaryen
+          key: ${{ runner.os }}-kotlin-wasm-binaryen-${{ hashFiles('build.gradle.kts') }}
+          restore-keys: ${{ runner.os }}-kotlin-wasm-binaryen-
+      - run: ./gradlew wasmJsTest
+
+  playwright:
+    name: Playwright web tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Cache Kotlin Wasm Binaryen
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/binaryen
+          key: ${{ runner.os }}-kotlin-wasm-binaryen-${{ hashFiles('build.gradle.kts') }}
+      - run: ./gradlew wasmJsBrowserDistribution
+      - run: npm ci
+      - run: npx playwright install chromium
+      - run: npm run web:screenshots

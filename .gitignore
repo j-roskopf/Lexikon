@@ -1,0 +1,12 @@
+.gradle/
+build/
+**/build/
+local.properties
+.DS_Store
+*.iml
+.idea/
+.kotlin/
+node_modules/
+playwright-report/
+test-results/
+.andy/

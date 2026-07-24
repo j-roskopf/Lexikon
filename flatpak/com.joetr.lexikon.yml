@@ -1,0 +1,19 @@
+app-id: com.joetr.lexikon
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: lexikon
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+modules:
+  - name: lexikon
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 lexikon /app/bin/lexikon
+    sources:
+      - type: file
+        path: build/compose/binaries/main-release/deb/com.joetr.lexikon_*.deb
+        dest-filename: lexikon.deb
