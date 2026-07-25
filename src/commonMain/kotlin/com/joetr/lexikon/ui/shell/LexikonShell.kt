@@ -46,15 +46,18 @@ import com.joetr.lexikon.ui.game.letterFromKey
 import com.joetr.lexikon.domain.GameController
 import com.joetr.lexikon.domain.GameMessage
 import com.joetr.lexikon.domain.PendingChange
+import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.GameStatus
 import com.joetr.lexikon.ui.dialogs.ConfirmSwitchDialog
 import com.joetr.lexikon.ui.dialogs.HelpDialog
+import com.joetr.lexikon.ui.dialogs.NextPuzzleCountdownDialog
 import com.joetr.lexikon.ui.dialogs.PostGameBanner
 import com.joetr.lexikon.ui.dialogs.SettingsDialog
 import com.joetr.lexikon.ui.dialogs.StatsDialog
 import com.joetr.lexikon.ui.game.GameBoard
 import com.joetr.lexikon.ui.game.OnscreenKeyboard
+import com.joetr.lexikon.ui.game.WinConfetti
 import com.joetr.lexikon.ui.game.computeGameLayoutSpec
 import com.joetr.lexikon.ui.theme.lexikonColors
 import kotlinx.coroutines.coroutineScope
@@ -123,8 +126,8 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
         ) {
             BoxWithConstraints(
                 modifier = Modifier
-                    .fillMaxSize()
                     .widthIn(max = 560.dp)
+                    .fillMaxSize()
                     .align(Alignment.TopCenter)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .graphicsLayer { translationX = shake.value },
@@ -154,10 +157,13 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                         Header(
                             mode = snapshot.mode,
                             length = snapshot.wordLength,
+                            difficulty = snapshot.difficulty,
                             compact = layout.compactHeader,
                             onModeChange = controller::requestModeChange,
                             onLengthChange = controller::requestLengthChange,
+                            onDifficultyChange = controller::requestDifficultyChange,
                             onHelp = controller::openHelp,
+                            onNextPuzzle = controller::openNextPuzzleCountdown,
                             onStats = controller::openStats,
                             onSettings = controller::openSettings,
                         )
@@ -209,13 +215,24 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                     )
                 }
             }
+
+            WinConfetti(
+                show = controller.snapshot.status == GameStatus.Won && !disableAnimations,
+            )
         }
     }
 
     if (controller.showHelp) HelpDialog(onDismiss = controller::dismissHelp)
+    if (controller.showNextPuzzleCountdown) {
+        NextPuzzleCountdownDialog(
+            timeUntilNextPuzzle = controller::timeUntilNextDailyPuzzle,
+            onDismiss = controller::closeNextPuzzleCountdown,
+        )
+    }
     if (controller.showStats) {
         StatsDialog(
             length = controller.snapshot.wordLength,
+            difficulty = controller.snapshot.difficulty,
             stats = controller.currentLengthStats(),
             maxGuesses = controller.snapshot.maxGuesses,
             onCopy = controller::copyResult,
@@ -235,6 +252,7 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
         ConfirmSwitchDialog(
             mode = pending.mode,
             length = pending.length,
+            difficulty = pending.difficulty,
             onConfirm = controller::confirmPendingChange,
             onDismiss = controller::cancelPendingChange,
         )
@@ -245,10 +263,13 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
 private fun Header(
     mode: GameMode,
     length: Int,
+    difficulty: Difficulty,
     compact: Boolean,
     onModeChange: (GameMode) -> Unit,
     onLengthChange: (Int) -> Unit,
+    onDifficultyChange: (Difficulty) -> Unit,
     onHelp: () -> Unit,
+    onNextPuzzle: () -> Unit,
     onStats: () -> Unit,
     onSettings: () -> Unit,
 ) {
@@ -284,6 +305,14 @@ private fun Header(
                 IconButton(onClick = onHelp, modifier = Modifier.testTag("help-button")) {
                     Text("?", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = colors.ink)
                 }
+                IconButton(onClick = onNextPuzzle, modifier = Modifier.testTag("next-puzzle-button")) {
+                    Icon(
+                        imageVector = LexikonIcons.Clock,
+                        contentDescription = "Next word countdown",
+                        tint = colors.ink,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 IconButton(onClick = onStats, modifier = Modifier.testTag("stats-button")) {
                     Icon(
                         imageVector = LexikonIcons.Stats,
@@ -315,6 +344,22 @@ private fun Header(
                     onClick = { onLengthChange(len) },
                     label = { Text(len.toString()) },
                     modifier = Modifier.testTag("length-$len"),
+                )
+            }
+        }
+        Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("difficulty-selector"),
+        ) {
+            for (level in Difficulty.entries) {
+                FilterChip(
+                    selected = difficulty == level,
+                    onClick = { onDifficultyChange(level) },
+                    label = { Text(level.name) },
+                    modifier = Modifier.testTag("difficulty-${level.slug}"),
                 )
             }
         }

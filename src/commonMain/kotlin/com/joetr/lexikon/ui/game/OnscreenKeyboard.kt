@@ -46,8 +46,8 @@ fun OnscreenKeyboard(
     val rowInset = (keyHeight.value * 0.23f).dp
     Column(
         modifier = modifier
-            .fillMaxWidth()
             .widthIn(max = 520.dp)
+            .fillMaxWidth()
             .padding(horizontal = 4.dp)
             .testTag("onscreen-keyboard"),
         verticalArrangement = Arrangement.spacedBy(6.dp),

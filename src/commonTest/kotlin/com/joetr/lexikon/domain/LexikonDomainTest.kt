@@ -1,5 +1,6 @@
 package com.joetr.lexikon.domain
 
+import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.GameStatus
 import com.joetr.lexikon.model.LengthStats
@@ -14,9 +15,20 @@ class DailyPuzzleSelectorTest {
     @Test
     fun stableHashForFixedDate() {
         val answers = listOf("ALPHA", "BRAVO", "CRANE", "DELTA", "EAGLE")
-        val a = DailyPuzzleSelector.dailyAnswer(LocalDate(2026, 7, 24), 5, answers)
-        val b = DailyPuzzleSelector.dailyAnswer(LocalDate(2026, 7, 24), 5, answers)
+        val a = DailyPuzzleSelector.dailyAnswer(LocalDate(2026, 7, 24), 5, Difficulty.Medium, answers)
+        val b = DailyPuzzleSelector.dailyAnswer(LocalDate(2026, 7, 24), 5, Difficulty.Medium, answers)
         assertEquals(a, b)
+    }
+
+    @Test
+    fun difficultiesGetIndependentAnswers() {
+        // Same pool and date for every tier, so any difference comes from the seed alone.
+        val answers = (1..50).map { "WORD${it.toString().padStart(2, '0')}" }
+        val date = LocalDate(2026, 7, 24)
+        val picks = Difficulty.entries.map {
+            DailyPuzzleSelector.dailyAnswer(date, 5, it, answers)
+        }
+        assertEquals(picks.size, picks.toSet().size)
     }
 
     @Test
@@ -24,15 +36,18 @@ class DailyPuzzleSelectorTest {
         val answers5 = (1..20).map { "WORD${it.toString().padStart(1, '0')}".take(5).uppercase() }
         val answers6 = (1..20).map { "WORDS${it.toString().padStart(1, '0')}".take(6).uppercase() }
         val date = LocalDate(2026, 7, 24)
-        val a5 = DailyPuzzleSelector.dailyAnswer(date, 5, answers5)
-        val a6 = DailyPuzzleSelector.dailyAnswer(date, 6, answers6)
+        val a5 = DailyPuzzleSelector.dailyAnswer(date, 5, Difficulty.Medium, answers5)
+        val a6 = DailyPuzzleSelector.dailyAnswer(date, 6, Difficulty.Medium, answers6)
         assertTrue(a5.length == 5)
         assertTrue(a6.length == 6)
     }
 
     @Test
     fun seedFormat() {
-        assertEquals("lexikon|2026-07-24|5", DailyPuzzleSelector.seedString(LocalDate(2026, 7, 24), 5))
+        assertEquals(
+            "lexikon|2026-07-24|5|hard",
+            DailyPuzzleSelector.seedString(LocalDate(2026, 7, 24), 5, Difficulty.Hard),
+        )
     }
 }
 
@@ -61,6 +76,7 @@ class ShareTextFormatterTest {
         val snap = com.joetr.lexikon.model.GameSnapshot(
             mode = GameMode.Daily,
             wordLength = 5,
+            difficulty = Difficulty.Hard,
             maxGuesses = 6,
             answer = "CRANE",
             rows = emptyList(),
@@ -74,7 +90,7 @@ class ShareTextFormatterTest {
             listOf(listOf(LetterMark.Absent, LetterMark.Present, LetterMark.Absent, LetterMark.Absent, LetterMark.Absent)),
             colorblind = false,
         )
-        assertTrue(text.startsWith("Lexikon 5 1/6"))
+        assertTrue(text.startsWith("Lexikon 5 Hard 1/6"))
         assertTrue(text.contains("2026-07-24"))
     }
 }
@@ -87,16 +103,74 @@ class WebRouteParserTest {
         assertEquals(WebRouteParser.Route(GameMode.Free, 8), WebRouteParser.parse("/free/8"))
         assertEquals(WebRouteParser.Route(GameMode.Daily, 5), WebRouteParser.parse("/invalid/path"))
     }
+
+    @Test
+    fun parsesDifficultySegment() {
+        assertEquals(
+            WebRouteParser.Route(GameMode.Daily, 8, Difficulty.Hard),
+            WebRouteParser.parse("/daily/8/hard"),
+        )
+        assertEquals(
+            WebRouteParser.Route(GameMode.Free, 5, Difficulty.Easy),
+            WebRouteParser.parse("/free/5/easy"),
+        )
+        // Unknown tier falls back to the default rather than failing the route.
+        assertEquals(
+            WebRouteParser.Route(GameMode.Daily, 8, Difficulty.Default),
+            WebRouteParser.parse("/daily/8/bogus"),
+        )
+    }
+
+    @Test
+    fun buildsPaths() {
+        assertEquals("/", WebRouteParser.toPath(GameMode.Daily, 5, Difficulty.Default))
+        assertEquals("/daily/5/hard", WebRouteParser.toPath(GameMode.Daily, 5, Difficulty.Hard))
+        assertEquals("/free/8", WebRouteParser.toPath(GameMode.Free, 8, Difficulty.Default))
+        assertEquals("/free/8/easy", WebRouteParser.toPath(GameMode.Free, 8, Difficulty.Easy))
+    }
+
+    @Test
+    fun pathsRoundTrip() {
+        for (mode in GameMode.entries) {
+            for (length in 5..10) {
+                for (difficulty in Difficulty.entries) {
+                    val path = WebRouteParser.toPath(mode, length, difficulty)
+                    assertEquals(WebRouteParser.Route(mode, length, difficulty), WebRouteParser.parse(path))
+                }
+            }
+        }
+    }
 }
 
 class DictionaryRepositoryTest {
+    private fun repo() = DictionaryRepository.fromWordLists(
+        mapOf(
+            5 to mapOf(
+                Difficulty.Easy to listOf("crane"),
+                Difficulty.Medium to listOf("slate"),
+                Difficulty.Hard to listOf("zesty"),
+            ),
+        ),
+        mapOf(5 to listOf("crane", "slate", "zesty", "audio")),
+    )
+
     @Test
     fun validatesGuesses() {
-        val repo = DictionaryRepository.fromWordLists(
-            mapOf(5 to listOf("crane")),
-            mapOf(5 to listOf("crane", "slate")),
-        )
-        assertTrue(repo.isValidGuess(5, "SLATE"))
-        assertFalse(repo.isValidGuess(5, "ZZZZZ"))
+        assertTrue(repo().isValidGuess(5, "SLATE"))
+        assertFalse(repo().isValidGuess(5, "ZZZZZ"))
+    }
+
+    @Test
+    fun answersAreScopedToDifficulty() {
+        val repo = repo()
+        assertEquals(setOf("CRANE"), repo.answers(5, Difficulty.Easy))
+        assertEquals(setOf("ZESTY"), repo.answers(5, Difficulty.Hard))
+        assertEquals(setOf("CRANE", "SLATE", "ZESTY"), repo.allAnswers(5))
+    }
+
+    @Test
+    fun everyAnswerIsAValidGuess() {
+        val repo = repo()
+        assertTrue(repo.allAnswers(5).all { repo.isValidGuess(5, it) })
     }
 }

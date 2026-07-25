@@ -25,7 +25,8 @@ internal fun computeGameLayoutSpec(
     val hasPostGameBanner = status != GameStatus.Playing
 
     val compactHeader = maxHeight < 640.dp || maxWidth < 360.dp
-    val headerHeight = if (compactHeader) 124.dp else 164.dp
+    // Title, mode row, length chips and difficulty chips. Keep in sync with Header.
+    val headerHeight = if (compactHeader) 160.dp else 202.dp
     val bannerHeight = if (hasPostGameBanner) 68.dp else 0.dp
     val contentGaps = 12.dp + if (hasPostGameBanner) 8.dp else 0.dp
 

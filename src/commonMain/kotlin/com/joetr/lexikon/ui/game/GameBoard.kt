@@ -1,6 +1,8 @@
 package com.joetr.lexikon.ui.game
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.EaseOutBack
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -113,6 +115,7 @@ private fun GameTile(
 ) {
     val colors = lexikonColors()
     val rotation = remember { Animatable(0f) }
+    val scale = remember { Animatable(1f) }
     var currentRevealedMark by remember {
         mutableStateOf<LetterMark?>(
             if (revealDelayMs == 0 && mark != LetterMark.Tbd && mark != LetterMark.Empty) mark else null,
@@ -122,13 +125,17 @@ private fun GameTile(
     LaunchedEffect(mark, char) {
         if (mark != LetterMark.Tbd && mark != LetterMark.Empty && char != null) {
             rotation.snapTo(0f)
+            scale.snapTo(1f)
             currentRevealedMark = null
             if (revealDelayMs > 0) kotlinx.coroutines.delay(revealDelayMs.toLong())
-            rotation.animateTo(90f, tween(300))
+            rotation.animateTo(90f, tween(180, easing = LinearOutSlowInEasing))
             currentRevealedMark = mark
-            rotation.animateTo(180f, tween(300))
+            rotation.animateTo(180f, tween(220, easing = LinearOutSlowInEasing))
+            scale.animateTo(1.18f, tween(90))
+            scale.animateTo(1f, tween(220, easing = EaseOutBack))
         } else {
             rotation.snapTo(0f)
+            scale.snapTo(1f)
             currentRevealedMark = null
         }
     }
@@ -153,10 +160,10 @@ private fun GameTile(
             .graphicsLayer {
                 val currentRot = if (mark == LetterMark.Tbd || mark == LetterMark.Empty) 0f else rotation.value
                 rotationX = currentRot
-                if (currentRot >= 90f) {
-                    scaleY = -1f
-                }
-                cameraDistance = 12f * density
+                val currentScale = if (mark == LetterMark.Tbd || mark == LetterMark.Empty) 1f else scale.value
+                scaleX = currentScale
+                scaleY = if (currentRot >= 90f) -currentScale else currentScale
+                cameraDistance = 16f * density
             }
             .clip(RoundedCornerShape(4.dp))
             .background(bg)

@@ -2,6 +2,7 @@ package com.joetr.lexikon.domain
 
 import com.joetr.lexikon.LexikonServices
 import com.joetr.lexikon.data.PersistenceRepository
+import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.GameSnapshot
 import com.joetr.lexikon.model.GameStatus
@@ -9,6 +10,7 @@ import com.joetr.lexikon.model.GuessRow
 import com.joetr.lexikon.model.LengthStats
 import com.joetr.lexikon.model.LetterMark
 import com.joetr.lexikon.model.PlayerSettings
+import com.joetr.lexikon.model.StatsKey
 import com.joetr.lexikon.model.Tile
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,7 +41,12 @@ class GameController(
         private set
 
     var snapshot by mutableStateOf(
-        createInitialSnapshot(initialRoute.mode, initialRoute.length, initialSettings)
+        createInitialSnapshot(
+            initialRoute.mode,
+            initialRoute.length,
+            initialRoute.difficulty,
+            initialSettings,
+        )
     )
         private set
 
@@ -58,26 +65,51 @@ class GameController(
     var showSettings by mutableStateOf(false)
         private set
 
+    var showNextPuzzleCountdown by mutableStateOf(false)
+        private set
+
     var pendingConfirm by mutableStateOf<PendingChange?>(null)
         private set
 
     val keyboardMarks: Map<Char, LetterMark>
         get() = GuessEngine.keyboardMarks(submittedMarks, submittedGuesses)
 
-    private fun createInitialSnapshot(mode: GameMode, length: Int, settings: PlayerSettings): GameSnapshot {
-        val today = services.clock.todayUtc()
+    private fun createInitialSnapshot(
+        mode: GameMode,
+        length: Int,
+        difficulty: Difficulty,
+        settings: PlayerSettings,
+    ): GameSnapshot {
+        val today = services.clock.today()
         val dateStr = today.toString()
         if (mode == GameMode.Daily) {
-            persistence.loadDaily(length, dateStr)?.let { stored ->
+            persistence.loadDaily(length, difficulty, dateStr)?.let { stored ->
                 restoreSubmitted(stored)
                 return stored
             }
         }
         val answer = when (mode) {
-            GameMode.Daily -> DailyPuzzleSelector.dailyAnswer(today, length, dictionary.answers(length).toList().sorted())
-            GameMode.Free -> dictionary.randomAnswer(length, services.seededRandom ?: kotlin.random.Random.Default)
+            // Sorted so the daily word depends only on the seed, not on file order.
+            GameMode.Daily -> DailyPuzzleSelector.dailyAnswer(
+                today,
+                length,
+                difficulty,
+                dictionary.answers(length, difficulty).toList().sorted(),
+            )
+            GameMode.Free -> dictionary.randomAnswer(
+                length,
+                difficulty,
+                services.seededRandom ?: kotlin.random.Random.Default,
+            )
         }
-        val snap = createGameSnapshot(mode, length, answer, settings.hardMode, if (mode == GameMode.Daily) dateStr else null)
+        val snap = createGameSnapshot(
+            mode,
+            length,
+            difficulty,
+            answer,
+            settings.hardMode,
+            if (mode == GameMode.Daily) dateStr else null,
+        )
         submittedMarks = emptyList()
         submittedGuesses = emptyList()
         if (mode == GameMode.Daily) persistence.saveDaily(snap)
@@ -168,8 +200,8 @@ class GameController(
     }
 
     private fun recordStats(won: Boolean, guessesUsed: Int) {
-        val length = snapshot.wordLength
-        val current = stats[length] ?: LengthStats(guessDistribution = IntArray(snapshot.maxGuesses))
+        val key = StatsKey(snapshot.wordLength, snapshot.difficulty)
+        val current = stats[key] ?: LengthStats(guessDistribution = IntArray(snapshot.maxGuesses))
         val updated = StatsUpdater.recordResult(
             current.withDistributionSize(snapshot.maxGuesses),
             won,
@@ -177,38 +209,48 @@ class GameController(
             snapshot.maxGuesses,
             isDaily = snapshot.mode == GameMode.Daily,
         )
-        stats = stats + (length to updated)
+        stats = stats + (key to updated)
         persistence.saveStats(stats)
     }
 
     fun startNextFreeGame() {
         if (snapshot.mode != GameMode.Free) return
-        snapshot = createInitialSnapshot(GameMode.Free, snapshot.wordLength, settings)
+        snapshot = createInitialSnapshot(
+            GameMode.Free,
+            snapshot.wordLength,
+            snapshot.difficulty,
+            settings,
+        )
     }
 
     fun requestModeChange(mode: GameMode) {
         if (mode == snapshot.mode) return
-        if (hasActiveBoard()) {
-            pendingConfirm = PendingChange(mode, snapshot.wordLength)
-        } else {
-            applyModeLength(mode, snapshot.wordLength)
-        }
+        requestChange(PendingChange(mode, snapshot.wordLength, snapshot.difficulty))
     }
 
     fun requestLengthChange(length: Int) {
         val clamped = length.coerceIn(5, 10)
         if (clamped == snapshot.wordLength) return
+        requestChange(PendingChange(snapshot.mode, clamped, snapshot.difficulty))
+    }
+
+    fun requestDifficultyChange(difficulty: Difficulty) {
+        if (difficulty == snapshot.difficulty) return
+        requestChange(PendingChange(snapshot.mode, snapshot.wordLength, difficulty))
+    }
+
+    private fun requestChange(change: PendingChange) {
         if (hasActiveBoard()) {
-            pendingConfirm = PendingChange(snapshot.mode, clamped)
+            pendingConfirm = change
         } else {
-            applyModeLength(snapshot.mode, clamped)
+            applyChange(change)
         }
     }
 
     fun confirmPendingChange() {
         val pending = pendingConfirm ?: return
         pendingConfirm = null
-        applyModeLength(pending.mode, pending.length)
+        applyChange(pending)
     }
 
     fun cancelPendingChange() {
@@ -218,11 +260,17 @@ class GameController(
     private fun hasActiveBoard(): Boolean =
         submittedGuesses.isNotEmpty() && snapshot.status == GameStatus.Playing
 
-    private fun applyModeLength(mode: GameMode, length: Int) {
-        settings = settings.copy(lastMode = mode, lastWordLength = length)
+    private fun applyChange(change: PendingChange) {
+        settings = settings.copy(
+            lastMode = change.mode,
+            lastWordLength = change.length,
+            lastDifficulty = change.difficulty,
+        )
         persistence.saveSettings(settings)
-        snapshot = createInitialSnapshot(mode, length, settings)
-        services.routes?.navigate(WebRouteParser.Route(mode, length))
+        snapshot = createInitialSnapshot(change.mode, change.length, change.difficulty, settings)
+        services.routes?.navigate(
+            WebRouteParser.Route(change.mode, change.length, change.difficulty),
+        )
     }
 
     fun updateHardMode(enabled: Boolean) {
@@ -249,6 +297,10 @@ class GameController(
     fun closeStats() { showStats = false }
     fun openSettings() { showSettings = true }
     fun closeSettings() { showSettings = false }
+    fun openNextPuzzleCountdown() { showNextPuzzleCountdown = true }
+    fun closeNextPuzzleCountdown() { showNextPuzzleCountdown = false }
+
+    fun timeUntilNextDailyPuzzle() = timeUntilNextPuzzle(services.clock.now())
 
     fun copyResult() {
         val text = ShareTextFormatter.format(snapshot, submittedMarks, settings.colorblind)
@@ -261,8 +313,9 @@ class GameController(
     }
 
     fun currentLengthStats(): LengthStats =
-        stats[snapshot.wordLength]?.withDistributionSize(snapshot.maxGuesses)
+        stats[StatsKey(snapshot.wordLength, snapshot.difficulty)]
+            ?.withDistributionSize(snapshot.maxGuesses)
             ?: LengthStats(guessDistribution = IntArray(snapshot.maxGuesses))
 }
 
-data class PendingChange(val mode: GameMode, val length: Int)
+data class PendingChange(val mode: GameMode, val length: Int, val difficulty: Difficulty)

@@ -1,5 +1,6 @@
 package com.joetr.lexikon.domain
 
+import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.GameSnapshot
 import com.joetr.lexikon.model.GameStatus
@@ -18,12 +19,14 @@ fun emptyRows(wordLength: Int, maxGuesses: Int): List<GuessRow> =
 fun createGameSnapshot(
     mode: GameMode,
     wordLength: Int,
+    difficulty: Difficulty,
     answer: String,
     hardMode: Boolean,
     dailyDateUtc: String?,
 ): GameSnapshot = GameSnapshot(
     mode = mode,
     wordLength = wordLength,
+    difficulty = difficulty,
     maxGuesses = maxGuessesForLength(wordLength),
     answer = answer.uppercase(),
     rows = emptyRows(wordLength, maxGuessesForLength(wordLength)),
@@ -69,7 +72,7 @@ object ShareTextFormatter {
             GameStatus.Lost -> "X/${snapshot.maxGuesses}"
             GameStatus.Playing -> "${guessesUsed}/${snapshot.maxGuesses}"
         }
-        val header = "Lexikon ${snapshot.wordLength} $result"
+        val header = "Lexikon ${snapshot.wordLength} ${snapshot.difficulty.name} $result"
         val dateLine = when (snapshot.mode) {
             GameMode.Daily -> snapshot.dailyDateUtc ?: ""
             GameMode.Free -> "Free play"
@@ -93,24 +96,41 @@ object ShareTextFormatter {
 }
 
 object WebRouteParser {
-    data class Route(val mode: GameMode, val length: Int)
+    data class Route(
+        val mode: GameMode,
+        val length: Int,
+        val difficulty: Difficulty = Difficulty.Default,
+    )
 
-    fun parse(pathname: String, defaultLength: Int = 5): Route {
+    /**
+     * Accepts `/`, `/{mode}/{length}` and `/{mode}/{length}/{difficulty}`. The two-segment form
+     * predates difficulty support and keeps resolving to the default tier.
+     */
+    fun parse(
+        pathname: String,
+        defaultLength: Int = 5,
+        defaultDifficulty: Difficulty = Difficulty.Default,
+    ): Route {
         val segments = pathname.trim('/').split('/').filter { it.isNotEmpty() }
-        return when {
-            segments.isEmpty() -> Route(GameMode.Daily, defaultLength.coerceIn(5, 10))
-            segments.size == 2 && segments[0] == "daily" -> {
-                Route(GameMode.Daily, segments[1].toIntOrNull()?.coerceIn(5, 10) ?: 5)
-            }
-            segments.size == 2 && segments[0] == "free" -> {
-                Route(GameMode.Free, segments[1].toIntOrNull()?.coerceIn(5, 10) ?: 5)
-            }
-            else -> Route(GameMode.Daily, 5)
+        if (segments.isEmpty()) {
+            return Route(GameMode.Daily, defaultLength.coerceIn(5, 10), defaultDifficulty)
         }
+        val mode = when (segments[0]) {
+            "daily" -> GameMode.Daily
+            "free" -> GameMode.Free
+            else -> return Route(GameMode.Daily, 5)
+        }
+        if (segments.size !in 2..3) return Route(GameMode.Daily, 5)
+        val length = segments[1].toIntOrNull()?.coerceIn(5, 10) ?: 5
+        val difficulty = if (segments.size == 3) Difficulty.fromSlug(segments[2]) else Difficulty.Default
+        return Route(mode, length, difficulty)
     }
 
-    fun toPath(mode: GameMode, length: Int): String = when (mode) {
-        GameMode.Daily -> if (length == 5) "/" else "/daily/$length"
-        GameMode.Free -> "/free/$length"
+    fun toPath(mode: GameMode, length: Int, difficulty: Difficulty): String {
+        val suffix = if (difficulty == Difficulty.Default) "" else "/${difficulty.slug}"
+        return when (mode) {
+            GameMode.Daily -> if (length == 5 && suffix.isEmpty()) "/" else "/daily/$length$suffix"
+            GameMode.Free -> "/free/$length$suffix"
+        }
     }
 }

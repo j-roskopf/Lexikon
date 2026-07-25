@@ -1,15 +1,18 @@
 package com.joetr.lexikon.domain
 
 import com.joetr.lexikon.lexikon.generated.resources.Res
+import com.joetr.lexikon.model.Difficulty
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 
 object DictionaryLoader {
     @OptIn(ExperimentalResourceApi::class)
     suspend fun load(): DictionaryRepository {
-        val answers = mutableMapOf<Int, List<String>>()
+        val answers = mutableMapOf<Int, Map<Difficulty, List<String>>>()
         val guesses = mutableMapOf<Int, List<String>>()
         for (length in 5..10) {
-            answers[length] = readWordFile("files/words/answers-$length.txt")
+            answers[length] = Difficulty.entries.associateWith { difficulty ->
+                readWordFile("files/words/answers-$length-${difficulty.slug}.txt")
+            }
             guesses[length] = readWordFile("files/words/guesses-$length.txt")
         }
         return DictionaryRepository.fromWordLists(answers, guesses)

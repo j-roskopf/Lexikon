@@ -58,6 +58,7 @@ kotlin {
                 implementation(libs.coroutines.core)
                 implementation(libs.serialization.json)
                 implementation(libs.datetime)
+                implementation(libs.confettikit)
             }
         }
         val commonTest by getting {
@@ -75,6 +76,7 @@ kotlin {
         val wasmJsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.browser)
+                implementation(npm("@js-joda/timezone", "2.3.0"))
             }
         }
         val desktopTest by getting {

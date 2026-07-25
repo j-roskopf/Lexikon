@@ -20,12 +20,14 @@ fun main() {
             window.minimumSize = Dimension(580, 900)
             LexikonApp(
                 services = services,
-                initialRoute = WebRouteParser.Route(
-                    com.joetr.lexikon.model.GameMode.Daily,
-                    services.storage.let {
-                        com.joetr.lexikon.data.PersistenceRepository(it).loadSettings().lastWordLength
-                    },
-                ),
+                initialRoute = services.storage.let {
+                    val settings = com.joetr.lexikon.data.PersistenceRepository(it).loadSettings()
+                    WebRouteParser.Route(
+                        com.joetr.lexikon.model.GameMode.Daily,
+                        settings.lastWordLength,
+                        settings.lastDifficulty,
+                    )
+                },
             )
         }
     }
