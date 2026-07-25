@@ -2,7 +2,10 @@ package com.joetr.lexikon
 
 import com.joetr.lexikon.domain.WebRouteParser
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.atStartOfDayIn
+import com.joetr.lexikon.domain.EASTERN_TIME_ZONE
 import kotlin.random.Random
+import kotlin.time.Instant
 
 fun fakeScreenshotServices(): LexikonServices = LexikonServices(
     storage = InMemoryStorage(),
@@ -28,5 +31,6 @@ class NoopClipboard : ClipboardService {
 }
 
 class FixedClock(private val date: LocalDate) : ClockService {
-    override fun todayUtc(): LocalDate = date
+    override fun today(): LocalDate = date
+    override fun now(): Instant = date.atStartOfDayIn(EASTERN_TIME_ZONE)
 }

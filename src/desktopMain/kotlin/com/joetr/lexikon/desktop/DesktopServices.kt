@@ -5,9 +5,9 @@ import com.joetr.lexikon.ClockService
 import com.joetr.lexikon.LexikonServices
 import com.joetr.lexikon.StorageService
 import com.joetr.lexikon.WebRouteController
+import com.joetr.lexikon.domain.EASTERN_TIME_ZONE
 import com.joetr.lexikon.domain.WebRouteParser
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
@@ -28,8 +28,9 @@ fun createDesktopServices(): LexikonServices {
             }
         },
         clock = object : ClockService {
-            override fun todayUtc(): LocalDate =
-                Clock.System.now().toLocalDateTime(TimeZone.UTC).date
+            override fun today(): LocalDate =
+                Clock.System.now().toLocalDateTime(EASTERN_TIME_ZONE).date
+            override fun now() = Clock.System.now()
         },
         routes = object : WebRouteController {
             override fun navigate(route: WebRouteParser.Route) = Unit

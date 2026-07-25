@@ -40,8 +40,8 @@ fun LexikonApp(
     val persistence = remember { PersistenceRepository(services.storage) }
     val settings = remember { initialSettingsOverride ?: persistence.loadSettings() }
     val route = initialRoute ?: services.routes?.let {
-        WebRouteParser.parse(it.currentPath(), settings.lastWordLength)
-    } ?: WebRouteParser.Route(settings.lastMode, settings.lastWordLength)
+        WebRouteParser.parse(it.currentPath(), settings.lastWordLength, settings.lastDifficulty)
+    } ?: WebRouteParser.Route(settings.lastMode, settings.lastWordLength, settings.lastDifficulty)
     val controller = remember(services, loaded, route) {
         GameController(services, loaded, persistence, settings, route)
     }

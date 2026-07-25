@@ -81,8 +81,23 @@ jobs:
         if: matrix.artifact == 'msi'
         shell: pwsh
         run: |
-          choco install wixtoolset --version 3.14.0 -y
-          Add-Content -Path $env:GITHUB_PATH -Value "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          $ErrorActionPreference = 'Stop'
+          function Find-WixBin {
+            Get-ChildItem 'C:\Program Files (x86)', 'C:\Program Files' -Filter 'WiX Toolset v3.*' -Directory -ErrorAction SilentlyContinue |
+              Sort-Object Name -Descending |
+              ForEach-Object { Join-Path $_.FullName 'bin' } |
+              Where-Object { Test-Path (Join-Path $_ 'candle.exe') } |
+              Select-Object -First 1
+          }
+          $bin = Find-WixBin
+          if (-not $bin) {
+            choco install wixtoolset -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "choco install wixtoolset failed with exit code $LASTEXITCODE" }
+            $bin = Find-WixBin
+          }
+          if (-not $bin) { throw 'WiX Toolset v3 bin directory not found after installation.' }
+          Write-Host "Using WiX Toolset at $bin"
+          Add-Content -Path $env:GITHUB_PATH -Value $bin
       - name: Build Windows package
         if: matrix.artifact == 'msi'
         shell: pwsh

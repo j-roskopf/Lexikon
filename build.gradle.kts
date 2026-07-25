@@ -58,6 +58,7 @@ kotlin {
                 implementation(libs.coroutines.core)
                 implementation(libs.serialization.json)
                 implementation(libs.datetime)
+                implementation(libs.confettikit)
             }
         }
         val commonTest by getting {

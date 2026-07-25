@@ -12,6 +12,7 @@ data class PlayerSettingsDto(
     val colorblind: Boolean = false,
     val lastWordLength: Int = 5,
     val lastMode: String = "Daily",
+    val lastDifficulty: String = "Medium",
     val hasSeenHelp: Boolean = false,
 )
 
@@ -28,6 +29,7 @@ data class LengthStatsDto(
 data class GameSnapshotDto(
     val mode: String,
     val wordLength: Int,
+    val difficulty: String = "Medium",
     val maxGuesses: Int,
     val answer: String,
     val rows: List<List<TileDto>>,
@@ -49,6 +51,12 @@ object LexikonJson {
 
 object StorageKeys {
     const val SETTINGS = "settings"
-    const val STATS = "stats.v1"
-    fun dailyKey(length: Int, date: String) = "daily.v1.$length.$date"
+
+    /** v1 was keyed by word length alone; it is migrated into the Medium difficulty. */
+    const val STATS_V1 = "stats.v1"
+    const val STATS = "stats.v2"
+
+    /** v1 daily keys had no difficulty, so all three tiers would collide on one entry. */
+    fun dailyKey(length: Int, difficulty: String, date: String) =
+        "daily.v2.$length.${difficulty.lowercase()}.$date"
 }

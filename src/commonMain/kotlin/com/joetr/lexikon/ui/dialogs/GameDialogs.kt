@@ -22,14 +22,22 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontWeight
+import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.GameStatus
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.joetr.lexikon.model.LengthStats
+import kotlin.time.Duration
 
 @Composable
 fun HelpDialog(onDismiss: () -> Unit) {
@@ -66,8 +74,49 @@ fun HelpDialog(onDismiss: () -> Unit) {
 }
 
 @Composable
+fun NextPuzzleCountdownDialog(
+    timeUntilNextPuzzle: () -> Duration,
+    onDismiss: () -> Unit,
+) {
+    var remaining by remember { mutableStateOf(timeUntilNextPuzzle()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(1000)
+            remaining = timeUntilNextPuzzle()
+        }
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Next word") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("A new daily puzzle unlocks at midnight, US Eastern time.")
+                Text(
+                    formatCountdown(remaining),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                    modifier = Modifier.testTag("next-puzzle-countdown-value"),
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = onDismiss) { Text("Close") }
+        },
+        modifier = Modifier.testTag("next-puzzle-countdown-dialog"),
+    )
+}
+
+private fun formatCountdown(duration: Duration): String {
+    val totalSeconds = duration.inWholeSeconds.coerceAtLeast(0)
+    val hours = totalSeconds / 3600
+    val minutes = (totalSeconds % 3600) / 60
+    val seconds = totalSeconds % 60
+    return "${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}"
+}
+
+@Composable
 fun StatsDialog(
     length: Int,
+    difficulty: Difficulty,
     stats: LengthStats,
     maxGuesses: Int,
     onCopy: () -> Unit,
@@ -76,7 +125,7 @@ fun StatsDialog(
     val winPct = if (stats.played > 0) (stats.wins * 100) / stats.played else 0
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Statistics ($length letters)") },
+        title = { Text("Statistics ($length letters, ${difficulty.name})") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
@@ -166,6 +215,7 @@ fun SettingsDialog(
 fun ConfirmSwitchDialog(
     mode: GameMode,
     length: Int,
+    difficulty: Difficulty,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -173,7 +223,11 @@ fun ConfirmSwitchDialog(
         onDismissRequest = onDismiss,
         title = { Text("Start a new game?") },
         text = {
-            Text("Changing to ${mode.name.lowercase()} mode (${length} letters) will abandon your current progress.")
+            Text(
+                "Changing to ${mode.name.lowercase()} mode " +
+                    "($length letters, ${difficulty.name.lowercase()}) " +
+                    "will abandon your current progress.",
+            )
         },
         confirmButton = {
             Button(onClick = onConfirm, modifier = Modifier.testTag("confirm-switch")) { Text("Continue") }

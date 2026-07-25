@@ -2,6 +2,28 @@ package com.joetr.lexikon.model
 
 enum class GameMode { Daily, Free }
 
+/**
+ * Which slice of the answer pool a puzzle is drawn from. Every tier holds
+ * ordinary, common words; harder tiers are less frequent and trickier to spell
+ * (rare letters, repeats, few vowels). Difficulty never changes the number of
+ * guesses.
+ */
+enum class Difficulty {
+    Easy, Medium, Hard;
+
+    val slug: String get() = name.lowercase()
+
+    companion object {
+        val Default = Medium
+
+        fun fromSlug(value: String?): Difficulty =
+            entries.firstOrNull { it.slug == value?.lowercase() } ?: Default
+    }
+}
+
+/** Stats are tracked separately for each word length and difficulty. */
+data class StatsKey(val length: Int, val difficulty: Difficulty)
+
 enum class LetterMark { Correct, Present, Absent, Empty, Tbd }
 
 data class Tile(val char: Char?, val mark: LetterMark)
@@ -17,6 +39,7 @@ enum class GameStatus { Playing, Won, Lost }
 data class GameSnapshot(
     val mode: GameMode,
     val wordLength: Int,
+    val difficulty: Difficulty,
     val maxGuesses: Int,
     val answer: String,
     val rows: List<GuessRow>,
@@ -62,5 +85,6 @@ data class PlayerSettings(
     val colorblind: Boolean = false,
     val lastWordLength: Int = 5,
     val lastMode: GameMode = GameMode.Daily,
+    val lastDifficulty: Difficulty = Difficulty.Default,
     val hasSeenHelp: Boolean = false,
 )

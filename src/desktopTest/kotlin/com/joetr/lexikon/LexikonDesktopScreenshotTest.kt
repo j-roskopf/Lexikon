@@ -16,6 +16,7 @@ import com.joetr.lexikon.data.PersistenceRepository
 import com.joetr.lexikon.domain.DictionaryRepository
 import com.joetr.lexikon.domain.GameController
 import com.joetr.lexikon.domain.WebRouteParser
+import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.PlayerSettings
 import com.joetr.lexikon.ui.shell.LexikonShell
@@ -74,7 +75,7 @@ class LexikonDesktopScreenshotTest {
             else -> "crane"
         }
         val dictionary = DictionaryRepository.fromWordLists(
-            mapOf(wordLength to listOf(sampleWord)),
+            mapOf(wordLength to Difficulty.entries.associateWith { listOf(sampleWord) }),
             mapOf(wordLength to listOf(sampleWord, "slate")),
         )
         val persistence = PersistenceRepository(services.storage)

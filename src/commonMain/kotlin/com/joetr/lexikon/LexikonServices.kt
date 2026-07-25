@@ -2,6 +2,7 @@ package com.joetr.lexikon
 
 import com.joetr.lexikon.domain.WebRouteParser
 import kotlinx.datetime.LocalDate
+import kotlin.time.Instant
 
 interface StorageService {
     fun read(key: String): String?
@@ -13,8 +14,12 @@ interface ClipboardService {
     fun copy(text: String)
 }
 
+/**
+ * The daily puzzle rolls over at midnight US Eastern time, not UTC.
+ */
 interface ClockService {
-    fun todayUtc(): LocalDate
+    fun today(): LocalDate
+    fun now(): Instant
 }
 
 interface WebRouteController {
