@@ -9,6 +9,7 @@ import kotlinx.browser.window
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
+    ensureJsJodaTimezoneLoaded()
     val root = document.getElementById("root") ?: error("Missing #root")
     val services = createWebServices()
     val params = window.location.search

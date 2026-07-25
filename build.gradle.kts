@@ -76,6 +76,7 @@ kotlin {
         val wasmJsMain by getting {
             dependencies {
                 implementation(libs.kotlinx.browser)
+                implementation(npm("@js-joda/timezone", "2.3.0"))
             }
         }
         val desktopTest by getting {
