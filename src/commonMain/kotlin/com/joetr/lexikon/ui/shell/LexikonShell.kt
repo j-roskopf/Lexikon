@@ -75,7 +75,7 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                 showInputErrorFeedback(
                     snackbar = snackbar,
                     shake = shake,
-                    text = "Not in word list",
+                    text = null,
                     disableAnimations = disableAnimations,
                 )
                 controller.clearMessage()
@@ -376,7 +376,7 @@ private fun TextButtonIcon(label: String, onClick: () -> Unit, tag: String) {
 private suspend fun showInputErrorFeedback(
     snackbar: SnackbarHostState,
     shake: Animatable<Float, *>,
-    text: String,
+    text: String?,
     disableAnimations: Boolean,
 ) {
     coroutineScope {
@@ -390,6 +390,8 @@ private suspend fun showInputErrorFeedback(
                 shake.animateTo(0f, tween(50))
             }
         }
-        snackbar.showSnackbar(text)
+        if (text != null) {
+            snackbar.showSnackbar(text)
+        }
     }
 }
