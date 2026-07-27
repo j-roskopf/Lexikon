@@ -249,10 +249,10 @@ fun PostGameBanner(
     modifier: Modifier = Modifier,
 ) {
     if (status == GameStatus.Playing) return
-    Column(
+    Row(
         modifier = modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("post-game-banner"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             when (status) {
@@ -262,14 +262,12 @@ fun PostGameBanner(
             },
             style = MaterialTheme.typography.titleMedium,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onCopy, modifier = Modifier.testTag("copy-result")) {
-                Text("Copy result")
-            }
-            if (mode == GameMode.Free) {
-                Button(onClick = onNext, modifier = Modifier.testTag("next-game")) {
-                    Text("Next puzzle")
-                }
+        Button(onClick = onCopy, modifier = Modifier.testTag("copy-result")) {
+            Text("Copy result")
+        }
+        if (mode == GameMode.Free) {
+            Button(onClick = onNext, modifier = Modifier.testTag("next-game")) {
+                Text("Next puzzle")
             }
         }
     }
