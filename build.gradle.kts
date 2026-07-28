@@ -49,42 +49,32 @@ kotlin {
     }
 
     sourceSets {
-        val commonMain by getting {
-            dependencies {
-                implementation(libs.compose.runtime)
-                implementation(libs.compose.foundation)
-                implementation(libs.compose.material3)
-                implementation(libs.compose.components.resources)
-                implementation(libs.coroutines.core)
-                implementation(libs.serialization.json)
-                implementation(libs.datetime)
-                implementation(libs.confettikit)
-            }
+        commonMain.dependencies {
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.components.resources)
+            implementation(libs.coroutines.core)
+            implementation(libs.serialization.json)
+            implementation(libs.datetime)
+            implementation(libs.confettikit)
         }
-        val commonTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-                implementation(libs.junit)
-            }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.junit)
         }
-        val desktopMain by getting {
-            dependencies {
-                implementation(compose.desktop.currentOs)
-                implementation(libs.coroutines.swing)
-            }
+        getByName("desktopMain").dependencies {
+            implementation(compose.desktop.currentOs)
+            implementation(libs.coroutines.swing)
         }
-        val wasmJsMain by getting {
-            dependencies {
-                implementation(libs.kotlinx.browser)
-                implementation(npm("@js-joda/timezone", "2.3.0"))
-            }
+        wasmJsMain.dependencies {
+            implementation(libs.kotlinx.browser)
+            implementation(npm("@js-joda/timezone", "2.25.2"))
         }
-        val desktopTest by getting {
-            dependencies {
-                implementation(kotlin("test"))
-                implementation(libs.compose.ui.test.junit4)
-                implementation(libs.roborazzi.compose.desktop)
-            }
+        getByName("desktopTest").dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.compose.ui.test.junit4)
+            implementation(libs.roborazzi.compose.desktop)
         }
     }
 }

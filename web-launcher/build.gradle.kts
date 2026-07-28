@@ -15,7 +15,7 @@ application {
     applicationName = "lexikon-web-launcher"
 }
 
-val syncWebDistribution by tasks.registering(Sync::class) {
+val syncWebDistribution = tasks.register<Sync>("syncWebDistribution") {
     dependsOn(rootProject.tasks.named("wasmJsBrowserDistribution"))
     from(rootProject.layout.buildDirectory.dir("dist/wasmJs/productionExecutable"))
     into(layout.buildDirectory.dir("generated/web-resources/web"))
@@ -34,6 +34,6 @@ tasks.test {
 }
 
 dependencies {
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.4")
+    testImplementation("org.junit.jupiter:junit-jupiter:6.1.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:6.1.2")
 }
