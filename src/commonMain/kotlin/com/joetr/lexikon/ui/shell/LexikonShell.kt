@@ -1,24 +1,30 @@
 package com.joetr.lexikon.ui.shell
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.joetr.lexikon.ui.theme.LexikonIcons
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,10 +34,17 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusTarget
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -40,34 +53,57 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.joetr.lexikon.ui.game.letterFromKey
 import com.joetr.lexikon.domain.GameController
 import com.joetr.lexikon.domain.GameMessage
-import com.joetr.lexikon.domain.PendingChange
 import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
 import com.joetr.lexikon.model.GameStatus
 import com.joetr.lexikon.ui.dialogs.ConfirmSwitchDialog
 import com.joetr.lexikon.ui.dialogs.HelpDialog
 import com.joetr.lexikon.ui.dialogs.NextPuzzleCountdownDialog
-import com.joetr.lexikon.ui.dialogs.PostGameBanner
 import com.joetr.lexikon.ui.dialogs.SettingsDialog
 import com.joetr.lexikon.ui.dialogs.StatsDialog
 import com.joetr.lexikon.ui.game.GameBoard
 import com.joetr.lexikon.ui.game.OnscreenKeyboard
+import com.joetr.lexikon.ui.game.PostGamePanel
 import com.joetr.lexikon.ui.game.WinConfetti
 import com.joetr.lexikon.ui.game.computeGameLayoutSpec
 import com.joetr.lexikon.ui.theme.lexikonColors
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
+/** Frames to keep asking for focus before giving up, so a slow first layout still lands. */
+private const val FOCUS_REQUEST_ATTEMPTS = 10
+
 @Composable
 fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
     val colors = lexikonColors()
     val snackbar = remember { SnackbarHostState() }
     val shake = remember { Animatable(0f) }
+    val boardFocus = remember { FocusRequester() }
+
+    // Key events only reach the shell while something inside it holds focus, so the board
+    // claims focus up front and takes it back whenever a dialog or the on-screen keyboard
+    // hands it off. Without this the physical keyboard stays dead until the first tap.
+    val dialogOpen = controller.showHelp || controller.showStats || controller.showSettings ||
+        controller.showNextPuzzleCountdown || controller.pendingConfirm != null
+    LaunchedEffect(dialogOpen, controller.snapshot.status) {
+        if (dialogOpen) return@LaunchedEffect
+        // The box is not placed yet on the first pass, and a request made before that is
+        // rejected, so keep asking for a few frames until it sticks.
+        repeat(FOCUS_REQUEST_ATTEMPTS) {
+            if (runCatching { boardFocus.requestFocus() }.getOrDefault(false)) {
+                return@LaunchedEffect
+            }
+            withFrameNanos { }
+        }
+    }
 
     LaunchedEffect(controller.message) {
         when (val msg = controller.message) {
@@ -114,6 +150,7 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                     ),
                 )
                 .padding(padding)
+                .focusRequester(boardFocus)
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when (event.key) {
@@ -122,6 +159,7 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                         else -> letterFromKey(event.key)?.let { controller.type(it); true } ?: false
                     }
                 }
+                .focusTarget()
                 .testTag("lexikon-shell"),
         ) {
             BoxWithConstraints(
@@ -138,7 +176,6 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                     maxHeight = maxHeight,
                     wordLength = snapshot.wordLength,
                     rowCount = snapshot.rows.size,
-                    status = snapshot.status,
                 )
                 val scrollState = rememberScrollState()
 
@@ -158,6 +195,10 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                             mode = snapshot.mode,
                             length = snapshot.wordLength,
                             difficulty = snapshot.difficulty,
+                            mastheadHeight = layout.mastheadHeight,
+                            railHeight = layout.railHeight,
+                            railGap = layout.railGap,
+                            splitControls = layout.splitControls,
                             compact = layout.compactHeader,
                             onModeChange = controller::requestModeChange,
                             onLengthChange = controller::requestLengthChange,
@@ -168,19 +209,12 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                             onSettings = controller::openSettings,
                         )
                         if (layout.scrollContent) {
-                            Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(12.dp))
                             GameBoard(
                                 snapshot = snapshot,
                                 disableAnimations = disableAnimations,
                                 tileSize = layout.tileSize,
                                 tileGap = layout.tileGap,
-                            )
-                            PostGameBanner(
-                                status = snapshot.status,
-                                answer = snapshot.answer,
-                                mode = snapshot.mode,
-                                onCopy = controller::copyResult,
-                                onNext = controller::startNextFreeGame,
                             )
                         } else {
                             Box(
@@ -196,23 +230,30 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
                                     tileGap = layout.tileGap,
                                 )
                             }
-                            PostGameBanner(
-                                status = snapshot.status,
-                                answer = snapshot.answer,
-                                mode = snapshot.mode,
-                                onCopy = controller::copyResult,
-                                onNext = controller::startNextFreeGame,
-                            )
                         }
                     }
-                    OnscreenKeyboard(
-                        keyboardMarks = controller.keyboardMarks,
-                        onLetter = controller::type,
-                        onBackspace = controller::backspace,
-                        onSubmit = controller::submit,
-                        enabled = snapshot.status == GameStatus.Playing,
-                        keyHeight = layout.keyHeight,
-                    )
+                    // The result surface takes over the keyboard's footprint instead of
+                    // adding a row, so the board never moves when a game ends.
+                    if (snapshot.status == GameStatus.Playing) {
+                        OnscreenKeyboard(
+                            keyboardMarks = controller.keyboardMarks,
+                            onLetter = controller::type,
+                            onBackspace = controller::backspace,
+                            onSubmit = controller::submit,
+                            enabled = true,
+                            keyHeight = layout.keyHeight,
+                        )
+                    } else {
+                        PostGamePanel(
+                            status = snapshot.status,
+                            answer = snapshot.answer,
+                            mode = snapshot.mode,
+                            height = layout.keyboardHeight,
+                            disableAnimations = disableAnimations,
+                            onCopy = controller::copyResult,
+                            onNext = controller::startNextFreeGame,
+                        )
+                    }
                 }
             }
 
@@ -259,11 +300,19 @@ fun LexikonShell(controller: GameController, disableAnimations: Boolean) {
     }
 }
 
+/**
+ * Two rows: a wordmark row carrying the icon actions, and a control rail carrying mode,
+ * word length and difficulty. On narrow viewports the rail splits into two.
+ */
 @Composable
 private fun Header(
     mode: GameMode,
     length: Int,
     difficulty: Difficulty,
+    mastheadHeight: Dp,
+    railHeight: Dp,
+    railGap: Dp,
+    splitControls: Boolean,
     compact: Boolean,
     onModeChange: (GameMode) -> Unit,
     onLengthChange: (Int) -> Unit,
@@ -274,104 +323,225 @@ private fun Header(
     onSettings: () -> Unit,
 ) {
     val colors = lexikonColors()
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            "Lexikon",
-            style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displayLarge,
-            color = colors.ink,
-            modifier = Modifier.testTag("brand-title"),
-        )
-        Spacer(Modifier.height(if (compact) 8.dp else 12.dp))
+    Column(Modifier.fillMaxWidth()) {
         Row(
-            Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().height(mastheadHeight),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                FilterChip(
-                    selected = mode == GameMode.Daily,
-                    onClick = { onModeChange(GameMode.Daily) },
-                    label = { Text("Daily") },
-                    modifier = Modifier.testTag("mode-daily"),
-                )
-                FilterChip(
-                    selected = mode == GameMode.Free,
-                    onClick = { onModeChange(GameMode.Free) },
-                    label = { Text("Free") },
-                    modifier = Modifier.testTag("mode-free"),
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                IconButton(onClick = onHelp, modifier = Modifier.testTag("help-button")) {
-                    Text("?", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = colors.ink)
-                }
-                IconButton(onClick = onNextPuzzle, modifier = Modifier.testTag("next-puzzle-button")) {
-                    Icon(
-                        imageVector = LexikonIcons.Clock,
-                        contentDescription = "Next word countdown",
-                        tint = colors.ink,
-                        modifier = Modifier.size(20.dp),
+            Text(
+                "Lexikon",
+                style = if (compact) {
+                    MaterialTheme.typography.headlineSmall
+                } else {
+                    MaterialTheme.typography.headlineMedium
+                },
+                color = colors.ink,
+                modifier = Modifier.testTag("brand-title"),
+            )
+            val buttonSize = if (compact) 34.dp else 38.dp
+            val iconSize = if (compact) 17.dp else 19.dp
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(
+                    onClick = onHelp,
+                    modifier = Modifier.size(buttonSize).testTag("help-button"),
+                ) {
+                    Text(
+                        "?",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                        ),
+                        color = colors.inkMuted,
                     )
                 }
-                IconButton(onClick = onStats, modifier = Modifier.testTag("stats-button")) {
-                    Icon(
-                        imageVector = LexikonIcons.Stats,
-                        contentDescription = "Stats",
-                        tint = colors.ink,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                IconButton(onClick = onSettings, modifier = Modifier.testTag("settings-button")) {
-                    Icon(
-                        imageVector = LexikonIcons.Settings,
-                        contentDescription = "Settings",
-                        tint = colors.ink,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
+                HeaderIconButton(LexikonIcons.Clock, "Next word countdown", onNextPuzzle, "next-puzzle-button", buttonSize, iconSize)
+                HeaderIconButton(LexikonIcons.Stats, "Stats", onStats, "stats-button", buttonSize, iconSize)
+                HeaderIconButton(LexikonIcons.Settings, "Settings", onSettings, "settings-button", buttonSize, iconSize)
             }
         }
-        Spacer(Modifier.height(if (compact) 6.dp else 8.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("length-selector"),
-        ) {
-            for (len in 5..10) {
-                FilterChip(
-                    selected = length == len,
-                    onClick = { onLengthChange(len) },
-                    label = { Text(len.toString()) },
-                    modifier = Modifier.testTag("length-$len"),
-                )
+        Spacer(Modifier.height(railGap))
+        if (splitControls) {
+            ControlRail(railHeight) {
+                ModeGroup(mode, onModeChange, compact)
+                RailDivider(railHeight)
+                DifficultyGroup(difficulty, onDifficultyChange, compact)
             }
-        }
-        Spacer(Modifier.height(if (compact) 4.dp else 6.dp))
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally),
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("difficulty-selector"),
-        ) {
-            for (level in Difficulty.entries) {
-                FilterChip(
-                    selected = difficulty == level,
-                    onClick = { onDifficultyChange(level) },
-                    label = { Text(level.name) },
-                    modifier = Modifier.testTag("difficulty-${level.slug}"),
-                )
+            Spacer(Modifier.height(6.dp))
+            ControlRail(railHeight) {
+                LengthGroup(length, onLengthChange, compact)
+            }
+        } else {
+            ControlRail(railHeight) {
+                ModeGroup(mode, onModeChange, compact)
+                RailDivider(railHeight)
+                LengthGroup(length, onLengthChange, compact)
+                RailDivider(railHeight)
+                DifficultyGroup(difficulty, onDifficultyChange, compact)
             }
         }
     }
 }
 
 @Composable
-private fun TextButtonIcon(label: String, onClick: () -> Unit, tag: String) {
-    IconButton(onClick = onClick, modifier = Modifier.testTag(tag)) {
-        Text(label, style = MaterialTheme.typography.titleMedium)
+private fun HeaderIconButton(
+    icon: ImageVector,
+    description: String,
+    onClick: () -> Unit,
+    tag: String,
+    buttonSize: Dp,
+    iconSize: Dp,
+) {
+    val colors = lexikonColors()
+    IconButton(onClick = onClick, modifier = Modifier.size(buttonSize).testTag(tag)) {
+        Icon(
+            imageVector = icon,
+            contentDescription = description,
+            tint = colors.inkMuted,
+            modifier = Modifier.size(iconSize),
+        )
     }
 }
+
+/** A single hairline-bordered bar that holds one or more segment groups. */
+@Composable
+private fun ControlRail(
+    height: Dp,
+    content: @Composable RowScope.() -> Unit,
+) {
+    val colors = lexikonColors()
+    val shape = RoundedCornerShape(7.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(height)
+            .clip(shape)
+            .background(colors.tileEmpty.copy(alpha = 0.65f))
+            .border(1.dp, colors.tileBorder, shape)
+            .padding(3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        content = content,
+    )
+}
+
+@Composable
+private fun RowScope.ModeGroup(mode: GameMode, onModeChange: (GameMode) -> Unit, compact: Boolean) {
+    Row(
+        modifier = Modifier.weight(groupWeight("Daily", "Free")).fillMaxHeight().testTag("mode-selector"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RailSegment("Daily", mode == GameMode.Daily, { onModeChange(GameMode.Daily) }, "mode-daily", compact)
+        RailSegment("Free", mode == GameMode.Free, { onModeChange(GameMode.Free) }, "mode-free", compact)
+    }
+}
+
+@Composable
+private fun RowScope.LengthGroup(length: Int, onLengthChange: (Int) -> Unit, compact: Boolean) {
+    val labels = (5..10).map { it.toString() }
+    Row(
+        modifier = Modifier.weight(groupWeight(*labels.toTypedArray())).fillMaxHeight().testTag("length-selector"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (len in 5..10) {
+            RailSegment(len.toString(), length == len, { onLengthChange(len) }, "length-$len", compact)
+        }
+    }
+}
+
+@Composable
+private fun RowScope.DifficultyGroup(
+    difficulty: Difficulty,
+    onDifficultyChange: (Difficulty) -> Unit,
+    compact: Boolean,
+) {
+    val labels = Difficulty.entries.map { it.name }
+    Row(
+        modifier = Modifier.weight(groupWeight(*labels.toTypedArray())).fillMaxHeight().testTag("difficulty-selector"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (level in Difficulty.entries) {
+            RailSegment(
+                level.name,
+                difficulty == level,
+                { onDifficultyChange(level) },
+                "difficulty-${level.slug}",
+                compact,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RowScope.RailSegment(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    tag: String,
+    compact: Boolean,
+) {
+    val colors = lexikonColors()
+    val background by animateColorAsState(
+        targetValue = if (selected) colors.ink else Color.Transparent,
+        animationSpec = tween(durationMillis = 160),
+        label = "railSegmentBackground",
+    )
+    val foreground by animateColorAsState(
+        targetValue = if (selected) colors.paper else colors.inkMuted,
+        animationSpec = tween(durationMillis = 160),
+        label = "railSegmentForeground",
+    )
+    Box(
+        modifier = Modifier
+            .weight(labelWeight(label))
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(4.dp))
+            .background(background)
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontSize = if (compact) 12.sp else 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                letterSpacing = 0.2.sp,
+            ),
+            color = foreground,
+            maxLines = 1,
+            softWrap = false,
+        )
+    }
+}
+
+@Composable
+private fun RailDivider(railHeight: Dp) {
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 5.dp)
+            .width(1.dp)
+            .height((railHeight.value - 16f).coerceAtLeast(8f).dp)
+            .background(lexikonColors().tileBorder),
+    )
+}
+
+/**
+ * Segments size themselves by label length so "Medium" is never squeezed next to "5".
+ * A group's weight is the sum of its members', which keeps the proportions identical
+ * whether the group sits in a shared rail or one of its own.
+ */
+private fun labelWeight(label: String): Float = when (label.length) {
+    1 -> 1f
+    2 -> 1.25f
+    3, 4 -> 1.6f
+    5 -> 1.8f
+    else -> 2f
+}
+
+private fun groupWeight(vararg labels: String): Float = labels.sumOf { labelWeight(it).toDouble() }.toFloat()
 
 private suspend fun showInputErrorFeedback(
     snackbar: SnackbarHostState,

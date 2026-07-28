@@ -28,5 +28,5 @@ fun main() {
             },
         )
     }
-    installKeyboardBridge()
+    installKeyboardBridge(root)
 }

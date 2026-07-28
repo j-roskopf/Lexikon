@@ -2,33 +2,46 @@ package com.joetr.lexikon.ui.game
 
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.joetr.lexikon.model.GameStatus
 
 data class GameLayoutSpec(
     val tileSize: Dp,
     val tileGap: Dp,
     val keyHeight: Dp,
+    val keyboardHeight: Dp,
+    val mastheadHeight: Dp,
+    val railHeight: Dp,
+    val railGap: Dp,
     val compactHeader: Boolean,
+    val splitControls: Boolean,
     val scrollContent: Boolean,
 )
 
+/** Second rail only appears when the three control groups cannot share one line. */
+private val SINGLE_RAIL_MIN_WIDTH = 516.dp
+private val SPLIT_RAIL_GAP = 6.dp
+
+/**
+ * [maxWidth] / [maxHeight] come from the BoxWithConstraints that already sits inside the
+ * shell's padding, so they are the usable content box. Do not subtract padding again.
+ */
 internal fun computeGameLayoutSpec(
     maxWidth: Dp,
     maxHeight: Dp,
     wordLength: Int,
     rowCount: Int,
-    status: GameStatus,
-    horizontalPadding: Dp = 16.dp,
-    verticalPadding: Dp = 12.dp,
 ): GameLayoutSpec {
-    val contentWidth = maxWidth - horizontalPadding * 2
-    val hasPostGameBanner = status != GameStatus.Playing
+    val contentWidth = maxWidth
 
     val compactHeader = maxHeight < 640.dp || maxWidth < 360.dp
-    // Title, mode row, length chips and difficulty chips. Keep in sync with Header.
-    val headerHeight = if (compactHeader) 160.dp else 202.dp
-    val bannerHeight = if (hasPostGameBanner) 68.dp else 0.dp
-    val contentGaps = 12.dp + if (hasPostGameBanner) 8.dp else 0.dp
+    val splitControls = contentWidth < SINGLE_RAIL_MIN_WIDTH
+
+    // Wordmark row plus one or two control rails. Keep in sync with Header.
+    val mastheadHeight = if (compactHeader) 38.dp else 44.dp
+    val railHeight = if (compactHeader) 30.dp else 34.dp
+    val railGap = if (compactHeader) 8.dp else 10.dp
+    val headerHeight = mastheadHeight + railGap + railHeight +
+        if (splitControls) SPLIT_RAIL_GAP + railHeight else 0.dp
+    val contentGaps = 12.dp
 
     val maxTileSize = when {
         wordLength <= 5 -> 58.dp
@@ -61,10 +74,8 @@ internal fun computeGameLayoutSpec(
     }
 
     fun totalHeight(tileSize: Dp, keyHeight: Dp): Dp =
-        verticalPadding * 2 +
-            headerHeight +
+        headerHeight +
             boardHeight(tileSize) +
-            bannerHeight +
             contentGaps +
             keyboardHeight(keyHeight)
 
@@ -82,12 +93,18 @@ internal fun computeGameLayoutSpec(
     }
 
     val scrollContent = totalHeight(tileSize, keyHeight) > availableHeight
+    val resolvedKeyHeight = keyHeight.coerceIn(minKeyHeight, maxKeyHeight)
 
     return GameLayoutSpec(
         tileSize = tileSize.coerceIn(minTileSize, maxTileSize),
         tileGap = tileGap,
-        keyHeight = keyHeight.coerceIn(minKeyHeight, maxKeyHeight),
+        keyHeight = resolvedKeyHeight,
+        keyboardHeight = keyboardHeight(resolvedKeyHeight),
+        mastheadHeight = mastheadHeight,
+        railHeight = railHeight,
+        railGap = railGap,
         compactHeader = compactHeader,
+        splitControls = splitControls,
         scrollContent = scrollContent,
     )
 }
