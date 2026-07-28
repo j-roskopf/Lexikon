@@ -1,6 +1,5 @@
 package com.joetr.lexikon.ui.game
 
-import com.joetr.lexikon.model.GameStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -14,7 +13,6 @@ class GameLayoutTest {
             maxHeight = 900.dp,
             wordLength = 5,
             rowCount = 6,
-            status = GameStatus.Playing,
         )
         assertEquals(58.dp, spec.tileSize)
         assertEquals(52.dp, spec.keyHeight)
@@ -28,20 +26,40 @@ class GameLayoutTest {
             maxHeight = 800.dp,
             wordLength = 10,
             rowCount = 11,
-            status = GameStatus.Playing,
         )
         assertTrue(spec.tileSize < 46.dp)
         assertTrue(spec.tileSize >= 24.dp)
     }
 
     @Test
+    fun wideViewportKeepsControlsOnASingleRail() {
+        val spec = computeGameLayoutSpec(
+            maxWidth = 560.dp,
+            maxHeight = 900.dp,
+            wordLength = 5,
+            rowCount = 6,
+        )
+        assertEquals(false, spec.splitControls)
+    }
+
+    @Test
+    fun narrowViewportSplitsControlsOntoTwoRails() {
+        val spec = computeGameLayoutSpec(
+            maxWidth = 390.dp,
+            maxHeight = 844.dp,
+            wordLength = 5,
+            rowCount = 6,
+        )
+        assertEquals(true, spec.splitControls)
+    }
+
+    @Test
     fun shortViewportPrioritizesKeyboardAndEnablesScroll() {
         val spec = computeGameLayoutSpec(
             maxWidth = 420.dp,
-            maxHeight = 560.dp,
+            maxHeight = 480.dp,
             wordLength = 10,
             rowCount = 11,
-            status = GameStatus.Playing,
         )
         assertEquals(40.dp, spec.keyHeight)
         assertEquals(24.dp, spec.tileSize)

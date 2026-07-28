@@ -76,6 +76,7 @@ fun LexikonTheme(colorblind: Boolean, content: @Composable () -> Unit) {
     val typography = Typography(
         displayLarge = TextStyle(fontFamily = displayFamily, fontWeight = FontWeight.Bold, fontSize = 42.sp, letterSpacing = (-0.5).sp),
         headlineMedium = TextStyle(fontFamily = displayFamily, fontWeight = FontWeight.Bold, fontSize = 28.sp),
+        headlineSmall = TextStyle(fontFamily = displayFamily, fontWeight = FontWeight.Bold, fontSize = 22.sp),
         titleMedium = TextStyle(fontFamily = bodyFamily, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
         bodyMedium = TextStyle(fontFamily = bodyFamily, fontWeight = FontWeight.Normal, fontSize = 15.sp),
         labelLarge = TextStyle(fontFamily = bodyFamily, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, letterSpacing = 0.5.sp),

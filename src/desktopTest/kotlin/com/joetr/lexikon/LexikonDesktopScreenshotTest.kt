@@ -38,6 +38,7 @@ class LexikonDesktopScreenshotTest {
             val wordLength: Int = 5,
             val width: Int = 420,
             val height: Int = 800,
+            val guesses: List<String> = emptyList(),
         )
 
         listOf(
@@ -46,12 +47,23 @@ class LexikonDesktopScreenshotTest {
             Scenario("compact-viewport", wordLength = 10, width = 360, height = 640),
             Scenario("colorblind", colorblind = true),
             Scenario("help-dialog", showHelp = true),
+            Scenario("wide-viewport", width = 640, height = 900),
+            Scenario("won-state", guesses = listOf("crane")),
+            Scenario("lost-state", guesses = List(6) { "slate" }),
         ).forEach { scenario ->
             runDesktopComposeUiTest(width = scenario.width, height = scenario.height) {
                 setContent {
                     val controller = remember(scenario) { screenshotController(scenario.colorblind, scenario.wordLength) }
                     if (scenario.showHelp) {
                         LaunchedEffect(Unit) { controller.openHelp() }
+                    }
+                    if (scenario.guesses.isNotEmpty()) {
+                        LaunchedEffect(Unit) {
+                            scenario.guesses.forEach { guess ->
+                                guess.forEach { controller.type(it) }
+                                controller.submit()
+                            }
+                        }
                     }
                     LexikonTheme(colorblind = controller.settings.colorblind) {
                         Box(Modifier.size(scenario.width.dp, scenario.height.dp)) {

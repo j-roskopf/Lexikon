@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontWeight
 import com.joetr.lexikon.model.Difficulty
 import com.joetr.lexikon.model.GameMode
-import com.joetr.lexikon.model.GameStatus
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.joetr.lexikon.model.LengthStats
 import kotlin.time.Duration
@@ -237,38 +236,4 @@ fun ConfirmSwitchDialog(
         },
         modifier = Modifier.testTag("confirm-dialog"),
     )
-}
-
-@Composable
-fun PostGameBanner(
-    status: GameStatus,
-    answer: String,
-    mode: GameMode,
-    onCopy: () -> Unit,
-    onNext: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (status == GameStatus.Playing) return
-    Row(
-        modifier = modifier.fillMaxWidth().padding(vertical = 8.dp).testTag("post-game-banner"),
-        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            when (status) {
-                GameStatus.Won -> "Splendid!"
-                GameStatus.Lost -> "The word was $answer"
-                GameStatus.Playing -> ""
-            },
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Button(onClick = onCopy, modifier = Modifier.testTag("copy-result")) {
-            Text("Copy result")
-        }
-        if (mode == GameMode.Free) {
-            Button(onClick = onNext, modifier = Modifier.testTag("next-game")) {
-                Text("Next puzzle")
-            }
-        }
-    }
 }
