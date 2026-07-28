@@ -1,3 +1,5 @@
+@file:OptIn(kotlin.js.ExperimentalWasmJsInterop::class)
+
 package com.joetr.lexikon.web
 
 import kotlin.js.JsModule
